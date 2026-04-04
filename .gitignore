@@ -1,0 +1,15 @@
+# Dati sensibili del sistema locale - mai pubblicare
+data/baseline.json
+data/alerts.json
+data/checkpoint.json
+
+# Virtual environment - non serve nel repo
+venv/
+
+# File di cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# File di log locali
+*.log
