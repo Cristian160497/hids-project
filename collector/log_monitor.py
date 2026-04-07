@@ -45,12 +45,7 @@ def check_logs():
 
     try:
         hand = win32evtlog.OpenEventLog(None, "Security")
-        flags = win32evtlog.EVENTLOG_FORWARDS_READ | win32evtlog.EVENTLOG_SEEK_READ
-
-        try:
-            win32evtlog.ReadEventLog(hand, flags, last_record if last_record > 0 else 1)
-        except Exception:
-            flags = win32evtlog.EVENTLOG_FORWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+        flags = win32evtlog.EVENTLOG_FORWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
 
         events = True
         while events:

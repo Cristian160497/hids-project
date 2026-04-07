@@ -24,6 +24,8 @@ PROCESS_WHITELIST = {
     "vds.exe",
     "SrTasks.exe",
     "backgroundTaskHost.exe",
+    "QcShm.exe",
+    "MicrosoftEdgeUpdate.exe",
 }
 
 PROCESS_TRUSTED_PATHS = {
