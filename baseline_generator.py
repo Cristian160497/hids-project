@@ -6,9 +6,9 @@ from datetime import datetime
 
 FILES_TO_MONITOR = {
     r"C:\Windows\System32\ntoskrnl.exe": "CRITICAL",
-    r"C:\Windows\System32\drivers\etc\hosts": "CRITICAL",
+    r"C:\Windows\System32\lsass.exe": "CRITICAL",
     r"C:\Windows\System32\cmd.exe": "HIGH",
-    r"C:\Windows\System32\lsass.exe": "MEDIUM",
+    r"C:\Windows\System32\drivers\etc\hosts": "MEDIUM",
     # bootmgr escluso: su sistemi UEFI risiede nella EFI System Partition
     # percorso reale: \EFI\MICROSOFT\BOOT\BOOTMGFW.EFI
     # non accessibile tramite filesystem Windows standard
