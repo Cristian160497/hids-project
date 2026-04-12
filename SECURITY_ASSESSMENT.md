@@ -1,6 +1,18 @@
+# Security Assessment Report
+## Custom Python HIDS - Threat Coverage Analysis
+
+**Date:** April 2026
+**Author:** Cristian
+**Target:** Custom Python-based Host Intrusion Detection System (HIDS)
+**Framework:** MITRE ATT&CK for Enterprise - Windows Systems
+
+---
+
 ## Executive Summary
 
 I analyzed the previously created detection system, comparing it with techniques documented in the MITRE ATT&CK framework for Windows systems, and identified several coverage gaps requiring remediation. Of the five techniques analyzed, three were not detected, two were partially detected, and none were fully detected by the current ruleset. An update to the underlying detection logic is therefore necessary, starting with the integration of Sysmon (System Monitor) to extend visibility into attack surfaces currently outside the system's detection scope.
+
+---
 
 ## Scope
 
@@ -16,6 +28,8 @@ I analyzed the previously created detection system, comparing it with techniques
 **Theoretical assessment only:** this evaluation was conducted through logical analysis of the system's detection rules against known behaviors. No real attacks were executed against the system. Practical validation - executing actual attack techniques in a controlled environment and observing system behavior - is planned as a follow-up activity.
 
 **Self-assessment:** this report was produced by the same individual who designed and built the system. An indipendent third-party assessment may identity additional gaps not covered here.
+
+---
 
 ## Methodology
 
@@ -47,6 +61,8 @@ For each technique, the following elements were analyzed:
 5. **Event Log activity** - which Windows Event IDs are generated, if any
 
 Each element was then compared against the detection surface covered by the system to determine coverage gaps and potential improvements.
+
+---
 
 ## Findings
 
@@ -197,3 +213,23 @@ Install and configure **Microsoft Sysmon** (System Monitor) from the Sysinternal
 Extend `collector/log_monitor.py` to read the Sysmon Event Log (`Microsoft-Windows-Sysmon/Operational`) as an additional data source - maintaining the existing architecture without refactoring.
 
 This recommendations is assigned medium priority due to the higher implementation effort - Sysmon requires installation, XML-based configuration, and integration testing - despite addressing the most technically complex coverage gaps.
+
+## Conclusion
+
+This assessment demonstrates that no detection system is immune to evolution in attack techniques. Of the five MITRE ATT&CK techniques evaluated, three were not detected and two were noly partially detected - confirming that the current ruleset, while architecturally sound, requires continuous updates to maintain effective coverage. 
+
+The system's underlying architecture - modular collectors, rule-based detection mapped to MITRE ATT&CK, and fault isolation - provides a solid foundation for improvement. However, the static nature of its detection rules represents the primary limitation: whitelists, monitored Event IDs, and network rules must be actively maintained to remain effective against an evolving threat landscape.
+
+The immediate next steps are the four recommendations outlined in this report, prioritied by impact and implementation effort:
+
+1. **REC-01** - Add EVENT_4670 to the Log Monitor *(Low effort, immediate impact)*
+2. **REC-02** - Integrate WMI Activitu Event Log *(medium effort, high impact)*
+3. **REC-03** - Add Firewall Monitor Collector *(medium effort, strategic value)*
+4. **REC-04** - Integrate Sysmon *(high effort, closes most complex gaps)*
+
+This assessment will be used as the technical roadmap for V2 development - each recommendation translating directly into an implementation task.
+
+---
+*Assessment conducted by Cristian - April 2026*
+*Target system: Custom Python HIDS for Windows*
+*Framework: MITRE ATT&CK for Enterprise*
