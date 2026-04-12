@@ -12,6 +12,7 @@ MONITORED_EVENTS = {
     4697: {"description": "Nuovo servizio installato", "severity": "HIGH", "filter": None},
     4698: {"description": "Nuovo scheduled task creato", "severity": "HIGH", "filter": None},
     4663: {"description": "Tentativo accesso a file/oggetto", "severity": "MEDIUM", "filter": None},
+    4670: {"description": "Permessi oggetto modificati", "severity": "HIGH", "filter": None},
 }
 
 SUSPICIOUS_PARENT_PROCESSES = {
