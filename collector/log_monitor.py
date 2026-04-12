@@ -15,6 +15,12 @@ MONITORED_EVENTS = {
     4670: {"description": "Permessi oggetto modificati", "severity": "HIGH", "filter": None},
 }
 
+WMI_MONITORED_EVENTS = {
+    5861: {"description": "WMI consumer permanente registrato", "severity": "HIGH"},
+    5857: {"description": "Operazione WMI provider avviata", "severity": "MEDIUM"},
+    5858: {"description": "Errore operazione WMI - possibile abuso", "severity": "MEDIUM"},
+}
+
 SUSPICIOUS_PARENT_PROCESSES = {
     "cmd.exe",
     "powershell.exe",
@@ -29,19 +35,31 @@ def load_checkpoint(checkpoint_path="data/checkpoint.json"):
         with open(checkpoint_path, "r") as f:
             content = f.read().strip()
             if not content:
-                return {"last_record_number": 0}
-            return json.loads(content)
-    except FileNotFoundError:
-        return {"last_record_number": 0}
+                return {"security_last_record": 0, "wmi_last_record": 0}
+            data = json.loads(content)
 
-def save_checkpoint(record_number, checkpoint_path="data/checkpoint.json"):
+            # Backward compatibility - converti vecchio formato
+            if "last_record_number" in data:
+                return {
+                    "security_last_record": data["last_record_number"],
+                    "wmi_last_record": 0
+                }
+            return data
+    except FileNotFoundError:
+        return {"security_last_record": 0, "wmi_last_record": 0}
+
+def save_checkpoint(security_record, wmi_record, checkpoint_path="data/checkpoint.json"):
     with open(checkpoint_path, "w") as f:
-        json.dump({"last_record_number": record_number}, f)
+        json.dump({
+            "security_last_record": security_record, 
+            "wmi_last_record": wmi_record
+        }, f)
 
 def check_logs():
     alerts = []
     checkpoint = load_checkpoint()
-    last_record = checkpoint.get("last_record_number", 0)
+    last_record = checkpoint.get("security_last_record", 0)
+    wmi_last_record = checkpoint.get("wmi_last_record", 0)
     latest_record = last_record
 
     try:
@@ -90,6 +108,50 @@ def check_logs():
         return [{"error": f"Errore lettura Event Log: {str(e)}"}]
 
     if latest_record > last_record:
-        save_checkpoint(latest_record)
+        save_checkpoint(latest_record, wmi_last_record)
 
+    return alerts
+
+def check_wmi_logs():
+    alerts = []
+    checkpoint = load_checkpoint()
+    last_record = checkpoint.get("wmi_last_record", 0)
+    security_last_record = checkpoint.get("security_last_record", 0)
+    latest_record = last_record
+
+    try:
+        hand = win32evtlog.OpenEventLog(None, "Microsoft-Windows-WMI-Activity/Operational")
+        flags = win32evtlog.EVENTLOG_FORWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+
+        events = True
+        while events:
+            events = win32evtlog.ReadEventLog(hand, flags, 0)
+            for event in events:
+                if event.RecordNumber <= last_record:
+                    continue
+
+                if event.RecordNumber > latest_record:
+                    latest_record = event.RecordNumber
+
+                event_id = event.EventID & 0xFFFF
+                if event_id in WMI_MONITORED_EVENTS:
+                    event_info = WMI_MONITORED_EVENTS[event_id]
+                    alerts.append({
+                        "timestamp": datetime.now().isoformat(),
+                        "alert_type": f"WMI_EVENT_{event_id}",
+                        "severity": event_info["severity"],
+                        "event_id": event_id,
+                        "description": event_info["description"],
+                        "record_number": event.RecordNumber,
+                        "details": f"WMI Event ID {event_id}: {event_info['description']}" 
+                    })
+
+        win32evtlog.CloseEventLog(hand)
+
+    except Exception as e:
+        return [{"error": f"Errore lettura WMI Event Log: {str(e)}"}]
+    
+    if latest_record > last_record:
+        save_checkpoint(security_last_record, latest_record)
+    
     return alerts
