@@ -8,6 +8,7 @@ from collector.file_integrity import check_file_integrity
 from collector.process_monitor import check_processes
 from collector.network_monitor import check_network_connections
 from collector.log_monitor import check_logs, check_wmi_logs
+from collector.firewall_monitor import check_firewall
 
 def run_engine():
     all_alerts = []
@@ -18,6 +19,7 @@ def run_engine():
         ("Network Monitor", check_network_connections),
         ("Log Monitor", check_logs),
         ("WMI Monitor", check_wmi_logs),
+        ("Firewall Monitor", check_firewall),
     ]
 
     for collector_name, collector_func in collectors:
