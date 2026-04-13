@@ -26,6 +26,7 @@ PROCESS_WHITELIST = {
     "backgroundTaskHost.exe",
     "QcShm.exe",
     "MicrosoftEdgeUpdate.exe",
+    "OfficeClickToRun.exe",
 }
 
 PROCESS_TRUSTED_PATHS = {
@@ -40,7 +41,13 @@ PROCESS_TRUSTED_PATHS = {
     "python.exe": [
         r"C:\Python313\python.exe",
         r"C:\Users\user\hids-project\venv\Scripts\python.exe",
-    ]
+    ],
+    "OfficeClickToRun.exe": [
+        r"C:\Program Files\Common Files\microsoft shared\ClickToRun",
+    ],
+    "FileCoAuth.exe": [
+        r"C:\Program Files\Microsoft OneDrive",
+    ],
 }
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

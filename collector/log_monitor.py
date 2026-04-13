@@ -35,24 +35,31 @@ def load_checkpoint(checkpoint_path="data/checkpoint.json"):
         with open(checkpoint_path, "r") as f:
             content = f.read().strip()
             if not content:
-                return {"security_last_record": 0, "wmi_last_record": 0}
+                return {"security_last_record": 0, "wmi_last_record": 0, "sysmon_last_record": 0}
             data = json.loads(content)
 
             # Backward compatibility - converti vecchio formato
             if "last_record_number" in data:
                 return {
                     "security_last_record": data["last_record_number"],
-                    "wmi_last_record": 0
+                    "wmi_last_record": 0,
+                    "sysmon_last_record": 0
                 }
+            
+            # Aggiungi sysmon_last_record se mancante
+            if "sysmon_last_record" not in data:
+                data["sysmon_last_record"] = 0
+
             return data
     except FileNotFoundError:
-        return {"security_last_record": 0, "wmi_last_record": 0}
+        return {"security_last_record": 0, "wmi_last_record": 0, "sysmon_last_record": 0}
 
-def save_checkpoint(security_record, wmi_record, checkpoint_path="data/checkpoint.json"):
+def save_checkpoint(security_record, wmi_record, sysmon_record, checkpoint_path="data/checkpoint.json"):
     with open(checkpoint_path, "w") as f:
         json.dump({
             "security_last_record": security_record, 
-            "wmi_last_record": wmi_record
+            "wmi_last_record": wmi_record,
+            "sysmon_last_record": sysmon_record
         }, f)
 
 def check_logs():
@@ -108,7 +115,7 @@ def check_logs():
         return [{"error": f"Errore lettura Event Log: {str(e)}"}]
 
     if latest_record > last_record:
-        save_checkpoint(latest_record, wmi_last_record)
+        save_checkpoint(latest_record, wmi_last_record, checkpoint.get("sysmon_last_record", 0))
 
     return alerts
 
@@ -152,6 +159,6 @@ def check_wmi_logs():
         return [{"error": f"Errore lettura WMI Event Log: {str(e)}"}]
     
     if latest_record > last_record:
-        save_checkpoint(security_last_record, latest_record)
+        save_checkpoint(security_last_record, latest_record, checkpoint.get("sysmon_last_record", 0))
     
     return alerts
