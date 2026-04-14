@@ -233,3 +233,51 @@ This assessment will be used as the technical roadmap for V2 development - each 
 *Assessment conducted by Cristian - April 2026*
 *Target system: Custom Python HIDS for Windows*
 *Framework: MITRE ATT&CK for Enterprise*
+
+---
+
+## Implementation Status
+
+All four recommendations from this assessment have been implemented following the priority order defined in the Recommendations section.
+
+---
+
+### REC-01 - EVENT_4670 - ✅ Implemented
+A single line was added to the `MONITORED_EVENTS` dictionary in `collector/log_monitor.py`, assigning severity HIGH to Event ID 4670:
+
+```python
+4670: {"description": "Object permissions modified", "severity": "HIGH", "filter": None}
+```
+
+No issues encountered. The lowest-effort recommendation with immediate impact.
+
+---
+
+### REC-02 - WMI Activity Event Log - ✅ Implemented
+A dedicated `check_wmi_logs()` function was added to `collector/log_monitor.py`, monitoring three WMI-specific Event IDs (5857, 5858, 5861) from the `Microsoft-Windows-WMI-Activity/Operational` log.
+
+The checkpoint pattern was extended to support multiple Event Logs simultaneously - `checkpoint.json` was migrated from a single key (`last_record_number`) to three independent keys (`security_last_record`, `wmi_last_record`, `sysmon_last_record`). Backward compatibility was implemented to handle systems with the old checkpoint format without data loss.
+
+---
+
+### REC-03 - Firewall Monitor Collector - ✅ Implemented
+Before writing the collector, the Windows Firewall logging was enabled:
+
+```powershell
+netsh advfirewall set allprofiles logging droppedconnections enable
+```
+
+The new `collector/firewall_monitor.py` reads `pfirewall.log` line by line, groups DROP connections by source IP using a `defaultdict(set)`, and generates a PORT_SCAN_DETECTED alert when a source IP attempts connections to more than 15 distinct destination ports within a 60-second window - the characteristic signature of a port scan. Known legitimate multicast addresses (SSDP) are excluded via an IP whitelist.
+
+---
+
+### REC-04 - Sysmon Integration - ✅ Implemented
+Sysmon v15.20 was installed with a custom XML configuration targeting three Event IDs: process creation from suspicious parent processes (ID 1), CreateRemoteThread for process injection detection (ID 8), and lsass.exe access for credential dumping detection (ID 10).
+
+**Issues encountered and resolved:**
+
+*Configuration not applying:* the XML configuration file name did not match the name specified in the update command, causing Sysmon to retain the previous configuration. Resolved by correcting the file name and reapplying.
+
+*856 false positive alerts on first run:* three open PowerShell terminals generated continuos process creation events matching the suspicious parent process rules. Resolved by adding exclusion rules to the Sysmon XML configuration for known legitimate processes.
+
+*OfficeClickToRun.exe and FileCoAuth.exe masquerading alerts:* both processes are legitimate Microsoft Office/OneDrive components whose executable paths include a version nu,ber that changes with each update. This caused persistent PROCESS_MASQUERADING alerts despite being legitimate. Resolved by modifying the `PROCESS_TRUSTED_PATHS` comparison logic from exact path matching to partial path matching using `any()` with `in` - accepting any path containing the base directory string regardless of version number.
