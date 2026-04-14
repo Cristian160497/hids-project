@@ -23,18 +23,20 @@ The system is divided into four distinct layers following a **Separation of Conc
 ```text
 main.py
 ├── collector/
-│   ├── file_integrity.py   → SHA-256 hash comparison against baseline
-│   ├── process_monitor.py  → process whitelist and masquerading detection
-│   ├── network_monitor.py  → behavioral rules for suspicious connections
-│   └── log_monitor.py      → Windows Event Log parsing (5 critical Event IDs)
+│   ├── file_integrity.py    → SHA-256 hash comparison against baseline
+│   ├── process_monitor.py   → process whitelist and masquerading detection
+│   ├── network_monitor.py   → behavioral rules for suspicious connections
+│   ├── log_monitor.py       → Windows Event Log parsing (6 critical Event IDs + WMI)
+│   ├── firewall_monitor.py  → port scan detection via Windows Firewall log
+│   └── sysmon_monitor.py    → kernel-level detection via Sysmon (Event IDs 1, 8, 10)
 ├── analyzer/
-│   └── engine.py           → aggregates alerts from all collectors
+│   └── engine.py            → aggregates alerts from all collectors
 ├── alerter/
-│   └── alert.py            → prints and persists alerts to disk
+│   └── alert.py             → prints and persists alerts to disk
 └── data/
-    ├── baseline.json        → system snapshot (hashes, processes, connections)
-    ├── checkpoint.json      → last processed Event Log record number
-    └── alerts.json          → persistent alert history
+    ├── baseline.json         → system snapshot (hashes, processes, connections)
+    ├── checkpoint.json       → last processed record number for Security, WMI and Sysmon logs
+    └── alerts.json           → persistent alert history
 ```
 **Data flow:** each collector independently detects anomalies and returns a list of alerts. The analyzer aggregates alla results, applying fault isolation so that a failing collector does not block the others. The alerter then prints alerts to console sorted by severity and appends them to the persistent alert history.
 
@@ -113,6 +115,49 @@ Parses the Windows Security Event Log monitoring five critical Event IDs selecte
 **Event 4688 filter:** new process creation events are extremely frequent on any active Windows system - generating hundreds of events per minute. To avoid alert fatigue, Event 4688 only generates an alert when the parent process is in a list of known suspicious processes associated with a Living off the Land (LotL) attacks and reverse shell techniques: `cmd.exe`, `powershell.exe`, `wscript.exe`, `cscript.exe`, `mshta.exe`, `rundll32.exe`.
 
 A parent process field is extracted from `StringInserts[13]` of the event record - the Windows-specific filed containing the full path of the process that spawned the new one.
+
+### WMI Monitor (`collector/log_monitor.py`)
+Monitors the `Microsoft-Windows-WMI-Activity/Operational` Event Log for suspicious WMI activity - a technique commonly used by attackers to execute malicious commands without installing new software.
+
+| Event ID | Description | Severity |
+|---|---|---|
+| 5857 | WMI provider operation started | MEDIUM |
+| 5858 | WMI operation error - possible abuse | MEDIUM |
+| 5861 | Permanent WMI consumer registered | HIGH |
+
+Event ID 5861 is particularly critical - it indicates the registration of a permanent WMI subscription, a technique used to achieve fileless persistence that survives reboots and does not appear in the Task Scheduler.
+
+---
+
+### Firewall Monitor (`collector/firewall_monitor.py`)
+Reads the Windows Firewall log (`pfirewall.log`) to detect inbound port scanning - the reconnaissance phase that typically precedes an attack.
+
+The collector groups DROP connections by source IP using a `defaultdict(set)` and generates a PORT_SCAN_DETECTED alert when a single source IP attempts connections to more than **15 distinct destination ports** within a 60-second window. Known legitimate multicast addresses (e.g. SSDP on `239.255.255.250`) are excluded via an IP whitelist.
+
+**Prerequisite:** Windows Firewall logging must be enabled before the collector can function:
+```powershell
+netsh advfirewall set allprofiles logging must be enabled before the collector can function:
+```
+
+**Alert severity:** HIGH
+
+---
+
+### Sysmon Monitor (`collector/sysmon_monitor.py`)
+Reads the `Microsoft-Windows-Sysmon/Operational` Event Log to provide kernel-level visibility into attack techniques that the Windows Security Event Log cannot detect natively.
+
+Sysmon v15.20 is configured via a custom XML file that limits logging to three critical Event IDs - minimizing resource consumption while maximizing detection coverage.
+
+| Event ID | Description | Severity |
+|---|---|---|
+| 1 | Process creation from suspicious parent process | HIGH |
+| 8 | CreateRemoteThread - process injection attempt | CRITICAL |
+| 10 | lsass.exe access - credential dumping attempt | CRITICAL |
+
+**Prerequisite:** Sysmon must be installed and configured before this collector can function:
+```powershell
+.\Sysmon64.exe -accepteula -i sysmon-config.xml
+```
 
 ---
 
@@ -217,30 +262,32 @@ The system relies on `pywin32` for Windows Event Log access and on Windows-speci
 ### Baseline requires manual regeneration after Windows updates
 Windows updates replace system files with newer versions, changing their SHA-256 hashes. After a significant update, the baseline must be manually regenerated with `python baseline_generator.py` to avoid persisent FILE_MODIFIED false positives on legitimate system files.
 
-### Whitelist bypass risk
-The process whitelist introduces a known weakness: an attacker aware of the whitelisted process names could name their malware after a whitelisted process to evade detection. This is partially mitigated by the `PROCESS_TRUSTED_PATHS` check - a whitelisted process running from an unexpected path still generates a PROCESS_MASQUERADING alert - but does not fully eliminate the risk.
+### Whitelist bypass risk - Partially mitigated in V2
+The process whitelist introduces a known weakness: an attacker aware of the whitelisted process names could name their malware after a whitelisted process to evade detection. This risk has been partially mitigated in V2 through Sysmon integration - kernel-level monitoring detects anomalous behaviors like process injection (Event ID 8) and lsass.exe access (Event ID 10) regardless of process name. However, the Sysmon configuration is scoped to specific attack techniques - techniques outside this scope remain undetected.
 
-### Static threat intelligence
-The Network Monitor uses a static list of known malicious IPs. New malicious IPs documented after the last manual update will not be detected. Automated threat intelligence feed integration - pulling updated IP lists periodically from sources like AbuseIPDB - is planned for V2.
+### Static threat intelligence - Partially mitigated in V2
+The Network Monitor uses a static list of known malicious IPs. New malicious IPs documented after the last manual update will not be detected. This has been partially mitigated by the Firewall Monitor - which uses behavioral detection (port scan pattern analysis) rather than static lists - but IP-based threat intelligence remains static and requires manual updates.
 
 ---
 
 ## Roadmap
 
-### V2 - Anomaly-based detection
-Implement a machine learning model that learns normal system behavior over time and flags deviations automatically - moving from static rules to dynamic behavioral analysis. Requires a training period on historical data collected by the current rule-based engine.
+### ✅ Implemented post-assessment (V2)
+Following the Security Assessment Report, four recommendations were prioritized 
+over the original V2 roadmap items — addressing structural coverage gaps 
+identified through MITRE ATT&CK analysis.
 
-### v2 - Dynamic threat intelligence
-Replace static lists with automated feeds updated priodically from public threat intelligence sources (AbuseIPDB, emerging threats lists). This covers suspicious ports, malicious IPs, and known malicious process signatures - ensuring detection rules stay current without manual intervention.
+- **EVENT_4670** — File and directory permission modification detection
+- **WMI Activity Monitor** — Dedicated WMI abuse detection
+- **Firewall Monitor** — Behavioral port scan detection
+- **Sysmon Integration** — Kernel-level detection for process injection and credential dumping
 
-### V2 - Event-driven baseling
-Automatically detect when a Windows update is in progress (by monitoring `TiWorker.exe` and `TrustedInstaller.exe`) and regenerate the baseline automatically upon completion - eliminating the need for manual regeneration after every update.
+### V2 — In progress
+- **Anomaly-based detection** — ML model requiring historical data collection period before training
+- **Dynamic threat intelligence** — Automated IP feed integration from sources like AbuseIPDB
+- **Event-driven baselining** — Automatic baseline regeneration triggered by Windows Update processes
 
-### V3 - Alert notification system
-Integrate real-time alert delivery via email, Telegram, or Slack - enabling monitoring without keeping a terminal open. CRITICAL alerts would trigger immediate notifications.
-
-### V3 - Network-level monitoring expansion
-Extend the system beyond a single host toward network-level monitoring - integrating with a properly configured router or a dedicated device to capture and analyze traffic across the entire local network.
-
-### V3 - Visualization dashboard
-Replace JSON-based alert storage with a lightweight web dashboard for real-time alert visualization, historical analysis, and trend detection.
+### V3 — Planned
+- **Alert notification system** — Real-time delivery via email, Telegram, or Slack
+- **Network-level monitoring expansion** — Integration with router or dedicated device for full network visibility
+- **Visualization dashboard** — Lightweight web dashboard for real-time alert visualization
