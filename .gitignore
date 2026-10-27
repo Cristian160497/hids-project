@@ -13,3 +13,4 @@ __pycache__/
 
 # File di log locali
 *.log
+.vscode/

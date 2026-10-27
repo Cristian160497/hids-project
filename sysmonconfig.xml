@@ -1,0 +1,21 @@
+<Sysmon schemaversion="4.90">
+    <HashAlgorithms>md5,sha256</HashAlgorithms>
+    <EventFiltering>
+        <!-- Process Creation (Event ID 1) -->
+        <ProcessCreate onmatch="exclude">
+            <Image condition="end with">\Windows\System32\svchost.exe</Image>
+        </ProcessCreate>
+
+        <!-- Network Connection (Event ID 3) -->
+        <NetworkConnect onmatch="include">
+            <Image condition="image">powershell.exe</Image>
+            <Image condition="image">cmd.exe</Image>
+            <Image condition="image">certutil.exe</Image>
+        </NetworkConnect>
+
+        <!-- ProcessAccess (Event ID 10) - Filtriamo per acquisire solo accessi a LSASS (Dumping credenziali) -->
+        <ProcessAccess onmatch="include">
+            <TargetImage condition="end with">lsass.exe</TargetImage>
+        </ProcessAccess>
+    </EventFiltering>
+</Sysmon>
