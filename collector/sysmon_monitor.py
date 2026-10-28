@@ -105,7 +105,7 @@ def check_sysmon_logs():
                     alerts.append(alert_data)
 
                     # Inoltro alert a Splunk
-                    splunk.send_alert(
+                    sent = splunk.send_alert(
                         rule_name=f"SYSMON_EVENT_{event_id}",
                         severity=event_info["severity"],
                         details={
@@ -118,7 +118,10 @@ def check_sysmon_logs():
                         },
                         sysmon_event_id=event_id
                     )
-                    print(f"[+] [{datetime.now().strftime('%H:%M:%S')}] Alert SYSMON_EVENT_{event_id} inviato a Splunk (Record #{record_id})")
+                    if sent:
+                        print(f"[+] [{datetime.now().strftime('%H:%M:%S')}] Alert SYSMON_EVENT_{event_id} inviato a Splunk (Record #{record_id})")
+                    else:
+                        print(f"[-] [{datetime.now().strftime('%H:%M:%S')}] Alert SYSMON_EVENT_{event_id} NON inviato a Splunk (Record #{record_id})")    
 
             except Exception as parse_err:
                 print(f"[-] Errore nel parsing dell'evento: {parse_err}")
